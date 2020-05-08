@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"errors"
 
 	"github.com/silenceper/wechat/context"
 	"github.com/silenceper/wechat/util"
@@ -13,6 +14,7 @@ const (
 	userInfoURL     = "https://api.weixin.qq.com/cgi-bin/user/info?access_token=%s&openid=%s&lang=zh_CN"
 	updateRemarkURL = "https://api.weixin.qq.com/cgi-bin/user/info/updateremark?access_token=%s"
 	userListURL     = "https://api.weixin.qq.com/cgi-bin/user/get"
+	batchGetUserInfoURL = "https://api.weixin.qq.com/cgi-bin/user/info/batchget?access_token=%s"
 )
 
 //User 用户管理
@@ -151,4 +153,40 @@ func (user *User) ListAllUserOpenIDs() ([]string, error) {
 			return openids, nil
 		}
 	}
+}
+
+// BatchUserQuery 待查询的用户列表
+type BatchUserQuery struct {
+	OpenID 		string		`json:"openid"`
+	Lang 		string		`json:"lang"`
+}
+
+// BatchGetUser 批量获取用户基本信息
+func (user *User) BatchGetUser(batchUserQuery ... *BatchUserQuery)([]*Info, error){
+	if len(batchUserQuery)>100{
+		return nil, errors.New("最多支持一次拉取100条")
+	}
+	var accessToken string
+	accessToken, err := user.GetAccessToken()
+	if err != nil {
+		return nil, err
+	}
+
+	requestMap := make(map[string]interface{})
+	requestMap["user_list"] = batchUserQuery
+	uri := fmt.Sprintf(batchGetUserInfoURL, accessToken)
+	response, err := util.PostJSON(uri, requestMap)
+	if err != nil {
+		return nil, err
+	}
+	//	batchUserQueryResponse 批量查询返回值
+	type batchUserQueryResponse struct {
+		List    []*Info		`json:"user_info_list"`
+	}
+	userList := &batchUserQueryResponse{}
+	err = json.Unmarshal(response, userList)
+	if err != nil {
+		return nil, err
+	}
+	return userList.List, nil
 }
